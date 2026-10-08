@@ -164,6 +164,8 @@ table.vars th{font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;colo
 /* interactive bench */
 .stagewrap{position:relative;border-radius:16px;overflow:hidden;background:#DADFE5;box-shadow:0 6px 24px rgba(15,23,42,.14);user-select:none;-webkit-user-select:none}
 .stage{display:block;width:100%;height:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
+.stage.dragging *{cursor:inherit!important}
+button.ivc{font:inherit;font-size:.82rem;cursor:pointer;background:transparent}button.ivc:hover{border-color:#0C9C98;color:var(--ink)}button.ivc.cur{outline:2px solid #0C9C98;outline-offset:1px}
 .flash{position:absolute;left:50%;bottom:14px;transform:translate(-50%,12px);background:#0E1621;color:#E8FFF4;font-weight:700;padding:8px 16px;border-radius:999px;font-size:.95rem;opacity:0;transition:.25s;pointer-events:none;max-width:86%;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .flash.on{opacity:1;transform:translate(-50%,0)}
 .sthint.on~.flash.on,.flash.on~.sthint{display:none}
@@ -583,7 +585,9 @@ function benchChips(ctx){
   const cnt = {}; run.rows.forEach(r => cnt[r.iv] = r.reads.length);
   const vals = inv.iv.values.slice(); for (const k in cnt) if (!vals.some(v => Math.abs(v - k) < 1e-9)) vals.push(+k);
   vals.sort((a, b) => a - b);
-  el.innerHTML = vals.map(v => { const n = cnt[v] || 0; return `<span class="ivc ${n ? 'has' : ''} ${n >= 3 ? 'full' : ''}" title="${n} reading${n === 1 ? '' : 's'}">${ivLabel(inv, v)}${inv.iv.unit && inv.iv.unit.length < 4 ? ' ' + inv.iv.unit : ''}${n ? `<b>${n}</b>` : ''}</span>`; }).join('');
+  const can = !!(ctx.p.scene && ctx.p.scene.setIV);
+  el.innerHTML = vals.map(v => { const n = cnt[v] || 0, tag = can ? 'button' : 'span'; return `<${tag} class="ivc ${n ? 'has' : ''} ${n >= 3 ? 'full' : ''}" ${can ? `data-ivset="${v}" title="Set the apparatus to ${ivLabel(inv, v)}${inv.iv.unit ? ' ' + inv.iv.unit : ''}"` : `title="${n} reading${n === 1 ? '' : 's'}"`}>${ivLabel(inv, v)}${inv.iv.unit && inv.iv.unit.length < 4 ? ' ' + inv.iv.unit : ''}${n ? `<b>${n}</b>` : ''}</${tag}>`; }).join('');
+  if (can) $$('[data-ivset]', el).forEach(b => b.onclick = () => { if (STG && STG.setIV(+b.dataset.ivset)) benchChips(ctxOf(ctx.p)); });
 }
 function viewMeasure(el, ctx){
   if (ctx.p.scene && SPR.backdrop) return viewBench(el, ctx);
@@ -986,7 +990,7 @@ const ST = {
   hit(x, y, w, h, name, arg, cursor){ return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#fff" fill-opacity="0" data-drag="${name}" data-arg="${arg === undefined ? '' : arg}" style="cursor:${cursor || 'grab'}"/>`; },
   tapHit(x, y, w, h, name, arg){ return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#fff" fill-opacity="0" data-tap="${name}" data-arg="${arg === undefined ? '' : arg}" style="cursor:pointer"/>`; },
   /* a grab handle hint: soft ring that pulses gently */
-  grip(cx, cy, r){ return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r || 13}" fill="#FFB547" fill-opacity=".28" stroke="#E39A1B" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"><animate attributeName="r" values="${(r || 13) - 2};${(r || 13) + 2};${(r || 13) - 2}" dur="1.6s" repeatCount="indefinite"/></circle>`; },
+  grip(){ return ''; },
   ruleV(x, yTop, pxPerCm, cmMax, opts){ opts = opts || {}; const w = opts.w || 34; let s = `<rect x="${x}" y="${yTop - 8}" width="${w}" height="${(cmMax * pxPerCm + 16).toFixed(1)}" rx="3" fill="#F1DDA2" stroke="#B48B47" stroke-width="1.5" filter="url(#f-sh)"/>`;
     const step = pxPerCm >= 6 ? 1 : pxPerCm >= 2.4 ? 5 : 10;
     for (let mm = 0; mm <= cmMax * 10; mm += step) { const y = yTop + mm / 10 * pxPerCm, L = mm % 100 === 0 ? 16 : mm % 50 === 0 ? 12 : mm % 10 === 0 ? 8 : 4;
@@ -1035,6 +1039,25 @@ const KINDS = {
   hanger:{spr:'hanger', w:28, th:sprH('hanger', 28)}, hanger50:{spr:'hanger', w:26, th:sprH('hanger', 26)}, s10:{w:34, th:4.2, g:10}, s20:{w:38, th:6.4, g:20}, s50:{w:44, th:8, g:50}, s100:{w:54, th:9.5, g:100}, s500:{w:70, th:15, g:500}
 };
 
+
+/* big cursors so students can see what each thing does: move, slide up/down, slide sideways, press */
+const CURS = (() => {
+  const u = (svg, x, y, fb) => `url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}') ${x} ${y}, ${fb}`;
+  const S = b => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">${b}</svg>`;
+  const arrows = 'M20 3l6 7h-4v8h8v-4l7 6-7 6v-4h-8v8h4l-6 7-6-7h4v-8h-8v4l-7-6 7-6v4h8v-8h-4z';
+  const dbl = 'M20 2l10 11h-6.5v14H30L20 38 10 27h6.5V13H10z';
+  const hand = 'M14 5a3 3 0 0 1 6 0v11.5a3 3 0 0 1 5.5 1.2 3 3 0 0 1 5.5 1.3 3 3 0 0 1 5 2.2V29c0 5-4 9-9 9h-5c-2.8 0-5.3-1.4-6.8-3.7L7.6 26a3 3 0 0 1 4.8-3.6L14 24.5z';
+  const draw = (d, fill, tr) => `<g ${tr || ''}><path d="${d}" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><path d="${d}" fill="${fill}" stroke="#1C2430" stroke-width="1.8" stroke-linejoin="round"/></g>`;
+  return {
+    grab:u(S(draw(arrows, '#0C9C98')), 20, 20, 'grab'),
+    grabbing:u(S(draw(arrows, '#E8622A')), 20, 20, 'grabbing'),
+    ns:u(S(draw(dbl, '#0C9C98')), 20, 20, 'ns-resize'),
+    ew:u(S(draw(dbl, '#0C9C98', 'transform="rotate(90 20 20)"')), 20, 20, 'ew-resize'),
+    tap:u(S(draw(hand, '#FFFFFF')), 16, 3, 'pointer')
+  };
+})();
+const curFix = h => h.replace(/cursor:\s*grabbing/g, 'cursor:' + CURS.grabbing).replace(/cursor:\s*grab(?!b)/g, 'cursor:' + CURS.grab).replace(/cursor:\s*ns-resize/g, 'cursor:' + CURS.ns).replace(/cursor:\s*ew-resize/g, 'cursor:' + CURS.ew).replace(/cursor:\s*pointer/g, 'cursor:' + CURS.tap);
+
 /* runtime */
 let STG = null;
 function mountStage(host, ctx, hooks){
@@ -1047,7 +1070,7 @@ function mountStage(host, ctx, hooks){
   if (sc.wake) sc.wake(ctxOf(p), st);
   const firstTime = !s.sceneSeen || !s.sceneSeen[ctx.inv.id];
   host.innerHTML = `<div class="stagewrap"><svg class="stage" viewBox="${(typeof sc.vb === 'function' ? sc.vb(ctx) : sc.vb || [0, 0, SW, SH]).join(' ')}" role="application" aria-label="${esc(p.title)}: interactive apparatus">${sprDefs()}<g class="dyn"></g><g class="over"></g></svg>` +
-    `<button class="sthelp" aria-label="How to use this bench" aria-expanded="false">?</button><div class="sthelpcard" hidden><b>On this bench</b><ul>${(sc.help || []).map(h => `<li>${tx(h)}</li>`).join('')}</ul></div>` +
+    `<button class="sthelp" aria-label="How to use this bench" aria-expanded="false">?</button><div class="sthelpcard" hidden><b>On this bench</b><ul>${(sc.help || []).concat(sc.setIV ? ['Shortcut: click a value in the row under the bench to set the apparatus to it.'] : []).map(h => `<li>${tx(h)}</li>`).join('')}</ul></div>` +
     `<div class="flash" aria-live="polite"></div>${sc.hint ? `<div class="sthint ${firstTime ? 'on' : ''}">${tx(typeof sc.hint === 'function' ? sc.hint(ctx) : sc.hint)}</div>` : ''}<div class="strotate">Turn your phone sideways for a bigger bench.</div></div>`;
   const svg = $('svg', host), dyn = $('.dyn', host), over = $('.over', host), flashEl = $('.flash', host), hintEl = $('.sthint', host);
   const hb = $('.sthelp', host), hc = $('.sthelpcard', host);
@@ -1058,7 +1081,7 @@ function mountStage(host, ctx, hooks){
   const inside = (z, P) => P.x >= z.x && P.x <= z.x + z.w && P.y >= z.y && P.y <= z.y + z.h;
   const render = () => {
     if (!alive) return; const c = c0();
-    dyn.innerHTML = sc.view(c, st);
+    dyn.innerHTML = curFix(sc.view(c, st));
     let o = '';
     if (st.held) { const K = KINDS[st.held.kind] || KINDS.s20;
       for (const b of binsOf(c)) if (b.kind === st.held.kind && b.n < b.max && !b.locked && b.id !== st.held.from) o += ST.zone(b.zone, inside(b.zone, st.held));
@@ -1105,6 +1128,7 @@ function mountStage(host, ctx, hooks){
         drag = {name, arg, p0:P, last:P, prev:P, moved:false};
         const h = sc.drag[name]; if (h.down && h.down(c, st, P, arg, drag) === false) { drag = null; render(); return; }
       } else return;
+      const cs = getComputedStyle(tEl).cursor || ''; svg.style.cursor = /ns-resize|ew-resize/.test(cs) ? cs : CURS.grabbing; svg.classList.add('dragging');
       try { svg.setPointerCapture(e.pointerId); } catch (er) {}
       e.preventDefault(); render(); api.go();
     } else if (tapEl) { drag = {tap:tapEl.dataset.tap, arg:tapEl.dataset.arg, p0:P}; if (tapEl.dataset.press) { press = {x:P.x, y:P.y, t:performance.now()}; render(); api.go(); } e.preventDefault(); }
@@ -1116,7 +1140,7 @@ function mountStage(host, ctx, hooks){
     const h = sc.drag[drag.name]; if (h.move) h.move(c0(), st, P, drag.arg, drag);
   });
   const end = e => {
-    if (!drag) return; const d = drag; drag = null; const P = pt(e), c = c0();
+    if (!drag) return; const d = drag; drag = null; const P = pt(e), c = c0(); svg.classList.remove('dragging'); svg.style.cursor = '';
     if (d.tap) { if (Math.hypot(P.x - d.p0.x, P.y - d.p0.y) < 14 && sc.tap && sc.tap[d.tap]) { sc.tap[d.tap](c, st, d.arg); render(); api.go(); save(); } return; }
     if (d.name === '__bin') {
       const k = st.held.kind, from = st.held.from; st.held = null;
@@ -1135,7 +1159,8 @@ function mountStage(host, ctx, hooks){
   svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
   const onKey = e => { if (!sc.keys || !sc.keys[e.key] || /input|textarea|select/i.test((e.target.tagName || ''))) return; e.preventDefault(); hideHint(); sc.tap[sc.keys[e.key]](c0(), st); render(); api.go(); save(); };
   document.addEventListener('keydown', onKey);
-  STG = {stop(){ alive = false; document.removeEventListener('keydown', onKey); if (raf) cancelAnimationFrame(raf); raf = null; save(); }, render, api, get st(){ return st; }};
+  const setIV = v => { if (!sc.setIV) return false; const c = c0(); if (sc.setIV(c, st, v) === false) return false; s.iv[ctxOf(p).inv.id] = v; if (sc.changed) sc.changed(c0(), st); render(); api.go(); save(); return true; };
+  STG = {setIV, stop(){ alive = false; document.removeEventListener('keydown', onKey); if (raf) cancelAnimationFrame(raf); raf = null; save(); }, render, api, get st(){ return st; }};
   render(); api.go();
   return STG;
 }
@@ -2007,6 +2032,10 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function sourceOf(c, st){ if (c.inv.id !== 'F') return null; if (st.cart === 5 - st.hang) return 'trolley'; if (st.cart === 0) return 'bench'; return 'mixed'; }
   const scene = {
     version:2, vb:[0, 236, 1200, 439],
+    setIV(c, st, v){ if (st.run) { c.api.flash('Wait for the cart to stop.'); return false; }
+      if (c.inv.id === 'F') { const n = Math.round(v / 20) - 1; if (n < 0 || n > 5) return false; const bench = st.tray > 0 && st.cart === 0; st.hang = n; if (bench) { st.cart = 0; st.tray = 5 - n; } else { st.cart = 5 - n; st.tray = 0; } }
+      else { const k = Math.round(v / 100); if (k < 0 || k > 5) return false; st.cart = k; st.tray = 5 - k; }
+      st.lcd = null; },
     hint:'Tap the red Release button to let the cart go. Drag the slotted masses to change the pull.',
     help:['Drag slotted masses between the cart, the hanger and the bench.', 'Tap the red <b>Release</b> button to let the cart go. After a run, drag the cart back to the start. The datalogger times the card through both gates.', 'Drag <b>gate 2</b> to change $d$. Drag the raised end of the runway to change the packing.', 'Friction check: tap <b>Unhook</b>, then tap the red <b>Push</b> button to give the cart a gentle push. If v₁ and v₂ match, friction is compensated; if not, drag the raised end of the runway and try again.', 'Weigh the cart and masses with the button below the bench.'],
     tools:[1],
@@ -2137,6 +2166,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   }
   const scene = {
     version:2,
+    setIV(c, st, v){ if (st.fall) { c.api.flash('Wait for it to land.'); return false; } const n = Math.round((v - 0.2) / 0.01); if (n < 0 || n > 20) return false; st.n = n; st.tray = 20 - n; },
     hint:'Lift the right-hand mass up to the red mark and let go.',
     keys:{' ':'watch', r:'wreset'},
     help:['Drag 10 g masses from the bench onto the right-hand hanger. The falling mass $m$ is shown beside it.', 'Drag the red tape mark on the metre rule to set the drop height $h$.', 'Lift the right-hand mass to the mark and let go. It must start from rest at the mark.', 'Choose who times it. If you time it yourself, a countdown runs before the mass drops: tap the stopwatch (or press the space bar) on <b>Go!</b> and again as it lands.'],
@@ -2250,6 +2280,9 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
 
   const scene = {
     version:2,
+    setIV(c, st, v){ const n = Math.round(v / 100); if (n < 0 || n > 5) return false;
+      if (c.inv.id === 'ramp' ? (st.th > 2 || st.slide) : st.v > 0) { c.api.flash(c.inv.id === 'ramp' ? 'Lower the ramp flat first.' : 'Wait for the block to stop.'); return false; }
+      st.on = n; st.tray = 5 - n; },
     vb(c){ return c.inv.id === 'ramp' ? [0, 0, 1200, 675] : [0, 236, 1200, 439]; },
     hint:c => c.inv.id === 'ramp' ? 'Drag the free end of the board up slowly until the block slips.' : 'Drag the force sensor to the right to pull the block.',
     help:['<b>Pull:</b> drag the force sensor. The block sticks until the pull reaches the limiting friction, then slides.', 'Static: the peak reading as it starts to slide is recorded. Dynamic: pull steadily so it keeps sliding; the mean reading is recorded.', 'Keep the string horizontal: raise the sensor and the string pulls at an angle.', 'Tap <b>Zero</b> with the string slack to zero the sensor lying flat.', '<b>Ramp:</b> drag the free end of the board up slowly until the block slips.', 'Drag 100 g masses between the bench and the block (ramp flat). Choose the surfaces at the top.'],
@@ -2419,6 +2452,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function eqR(c, st){ const F = P._loadF(c, loadG(st)), Fmax = Math.max(c.run.maxF || 0, F); return P._reading(Object.assign({}, c, {S:Object.assign({}, c.S, {eye:true})}), P._ext(c, F, Fmax)); }
   const scene = {
     version:2,
+    setIV(c, st, v){ const n = Math.round(v / 100); if (n < 0 || n > 10) return false; st.hang = n ? 1 : 0; st.htray = 1 - st.hang; st.on = Math.max(0, n - 1); st.tray = 9 - st.on; },
     hint:'Drag the hanger onto the spring, then add masses. Tap Record.',
     help:['Drag the hanger onto the spring, then 100 g masses onto the hanger. Take a reading with no load first.', 'Wait for the spring to stop bouncing before you record.', 'Drag the eye: read the scale with your eye level with the pointer, or you get parallax. The loupe shows what you see.', 'Load past about 700 g and the spring may pass its elastic limit. Fit a new spring with the button below the bench.'],
     tools:[0],
@@ -2500,6 +2534,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function force(c, st){ const p = P._phys(c, st.d); return c.rig.cal * (p.W - p.Fb) + c.rig.z; }
   const scene = {
     version:2,
+    setIV(c, st, v){ setY(c, st, WS + v * PXC); },
     hint:'Drag the clamp down to lower the cylinder into the can.',
     help:['Drag the clamp up or down. The cylinder goes in by half-centimetre steps; the depth is shown beside it.', 'The force sensor reading drops as the cylinder goes in: the loss is the buoyancy force.', 'Overflow: top up the can with the cylinder out, wait for the dripping to stop, empty the beaker, then lower the cylinder and wait again before you record.', 'Tap <b>Record</b> to save a reading. Choose the liquid at the top.'],
     tools:[0],
@@ -2573,6 +2608,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const yOfX = x => SURF + x * PXM;
   const scene = {
     version:2,
+    setIV(c, st, v){ if (st.ball) { c.api.flash('Wait for this ball to reach the bottom.'); return false; } st.ball = {drag:true, d:v, x:CXC, y:SURF - 40}; drop(c, st); },
     keys:{' ':'watch', r:'wreset'},
     hint:'Drag a ball bearing from the dish and drop it into the glycerol.',
     help:['Drag a ball bearing from the dish and let go above the cylinder.', 'Drag the rubber bands. The upper band must be low enough for the ball to have reached terminal speed.', 'Stopwatch: tap it (or press the space bar) as the ball passes the upper band and again at the lower band.', 'Light gates time it for you. Change the cylinder at the top: a narrow one slows the ball (the wall effect).', 'The thermometer and a terminal-speed check are in the buttons below the bench.'],
@@ -2663,6 +2699,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function setupPos(c){ return c.inv.id === 'explode' ? {xA:Kc.CA, xB:Kc.CB} : {xA:AX0, xB:Kc.CB}; }
   const scene = {
     version:2, vb:[0, 236, 1200, 439],
+    setIV(c, st, v){ if (c.inv.id !== 'explode') return false; if (st.run) { c.api.flash('Wait for the carts to stop.'); return false; } const n = Math.round(v / 0.5); st.nB = n; st.tray = 2 - n; },
     hint:c => c.inv.id === 'explode' ? 'Tap the plunger on cart A to push the carts apart.' : 'Pull cart A back against the spring and let go.',
     help:['Sticking and bouncing: pull cart A back against the spring launcher and let go. Pull further for a bigger push.', 'Explosion: tap the plunger on cart A.', 'Drag 0.50 kg masses between the bench and cart B.', 'Friction check: tap <b>Remove B</b>, launch A on its own, and adjust the packing until A keeps a steady speed.', 'After a run, tap <b>Set up again</b>.'],
     tools:[1],
@@ -2792,6 +2829,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const Lof = (c, st) => c.inv.id === 'L' ? st.L : P._LFIX, Mof = (c, st) => c.inv.id === 'M' ? 0.050 * (1 + st.n) : P._MFIX;
   const scene = {
     version:2,
+    setIV(c, st, v){ if (st.whirl) { c.api.flash('Stop whirling first.'); return false; }
+      if (c.inv.id === 'L') st.L = v; else { const n = Math.round(v / 0.05) - 1; if (n < 0 || n > 4) return false; st.n = n; st.tray = 4 - n; } },
     keys:{' ':'watch', r:'wreset'},
     hint:'Tap the hand to start whirling the bung.',
     help:['Drag the bung out or in to set the length $L$ (only when it is not whirling).', 'Drag 50 g masses between the bench and the hanger to change $M$.', 'Tap the hand to whirl the bung at a steady speed, with the paper clip just below the tube. Tap again to stop.', 'A partner times the set number of turns from <b>Go!</b>, or choose “I time it” and tap the stopwatch (or press the space bar) on Go! and at the last turn.'],
