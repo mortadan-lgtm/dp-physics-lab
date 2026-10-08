@@ -2008,7 +2008,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const scene = {
     version:2, vb:[0, 236, 1200, 439],
     hint:'Tap the cart to let it go. Drag the slotted masses to change the pull.',
-    help:['Drag slotted masses between the cart, the hanger and the bench.', 'Tap the cart to let it go from the start mark (or drag it back there first). The datalogger times the card through both gates.', 'Drag <b>gate 2</b> to change $d$. Drag the raised end of the runway to change the packing.', 'Friction check: tap <b>Unhook</b>, then flick the cart along the runway. Steady speed means friction is compensated.', 'Weigh the cart and masses with the button below the bench.'],
+    help:['Drag slotted masses between the cart, the hanger and the bench.', 'Tap the cart to let it go from the start mark (or drag it back there first). The datalogger times the card through both gates.', 'Drag <b>gate 2</b> to change $d$. Drag the raised end of the runway to change the packing.', 'Friction check: tap <b>Unhook</b>, then tap the cart to give it a gentle push. If v₁ and v₂ match, friction is compensated; if not, drag the raised end of the runway and try again.', 'Weigh the cart and masses with the button below the bench.'],
     tools:[1],
     init(c){ return c.inv.id === 'F' ? {xs:XS0, hang:0, cart:5, tray:0, hooked:true, lcd:null, run:null} : {xs:XS0, cart:0, tray:5, hooked:true, lcd:null, run:null}; },
     bins(c, st){
@@ -2035,6 +2035,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       g += ST.stack(cx + 8, deck + 2, st.cart, K.w, K.th).s;
       if (st.cart > 0 && !st.run) g += ST.hit(cx + 8 - K.w / 2 - 6, deck + 2 - st.cart * K.th - 8, K.w + 12, st.cart * K.th + 12, '__bin', 'cart');
       g += ST.hit(cx - CW / 2, TY - CH + 4, CW, CH - 4, 'cart', '', st.run ? 'default' : 'grab');
+      if (!st.run && st.xs < XS0 + 0.01) g += ST.grip(cx, TY - CH / 2, 16);
       g += gate(G1, null) + gate(g2, 'gate2') + (st.run ? '' : ST.grip(sx(g2), TY + 30, 12));
       s += `<g transform="rotate(${aD.toFixed(3)} ${TX1} ${TY})">${g}</g>`;
       /* distance between the gates, below the runway */
@@ -2066,7 +2067,6 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       const [hx, hy] = rot(a, TX0 + 10, TY + 4);
       if (!st.run) s += ST.grip(hx, hy, 14) + ST.hit(hx - 26, hy - 30, 52, 60, 'pack', '', 'ns-resize');
       s += ST.label(TX0 + 22, TY + 62, `packing ${c.S.pack} mm`, {fs:14});
-      if (!st.run && st.xs < XS0 + 0.01 && st.hooked) s += ST.grip(cx, TY - CH / 2, 16);
       s += ST.lcd(20, 250, st.lcd || [st.hooked ? 't₁ --.- ms' : 'v₁ -.--- m s⁻¹', st.hooked ? 't₂ --.- ms' : 'v₂ -.--- m s⁻¹', st.hooked ? 'a  -.-- m s⁻²' : '  '], {fs:20, dim:st.lcd ? null : [1, 1, 1]});
       return s; },
     drag:{
@@ -2074,12 +2074,12 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
         down(c, st, Pt, arg, d){ if (st.run) return false; d.off = Pt.x - sx(st.xs); d.x0 = st.xs; },
         move(c, st, Pt, arg, d){ const a = angV(c); st.xs = Math.max(XS0, Math.min(XMAX, (Pt.x - d.off - TX1) / Math.cos(a) / PXM + LEN)); st.lcd = null; },
         up(c, st, Pt, arg, d){ if (st.hooked) { if (!d.moved || st.xs < XS0 + 0.04) st.xs = st.xs < XS0 + 0.04 ? XS0 : st.xs; release(c, st); }
-          else { const u = d.vx / PXM; if (u > 0.12) push(c, st, Math.min(0.9, u)); else st.lcd = null; } }
+          else if (!d.moved) push(c, st, 0.45 * (1 + RND.n(0, 0.04))); else st.lcd = null; }
       },
       gate2:{ down(c, st){ if (st.run) return false; }, move(c, st, Pt){ const a = angV(c); const xs = (Pt.x - TX1) / Math.cos(a) / PXM + LEN; c.S.gap = Math.max(0.30, Math.min(0.70, Math.round((xs - G1) / 0.05) * 0.05)); st.lcd = null; } },
       pack:{ down(c, st, Pt, arg, d){ if (st.run) return false; d.p0 = c.S.pack; d.y0 = Pt.y; }, move(c, st, Pt, arg, d){ c.S.pack = Math.max(0, Math.min(30, Math.round(d.p0 + (d.y0 - Pt.y) / 3.1))); st.lcd = null; } }
     },
-    tap:{ hook(c, st){ if (st.run) return; st.hooked = !st.hooked; st.xs = XS0; st.lcd = null; if (!st.hooked) c.api.flash('Unhooked. Flick the cart along the runway to check the friction compensation.', 3200); } },
+    tap:{ hook(c, st){ if (st.run) return; st.hooked = !st.hooked; st.xs = XS0; st.lcd = null; if (!st.hooked) c.api.flash('Unhooked. Tap the cart to give it a gentle push.', 3200); } },
     step(c, st, dt){
       const r = st.run; if (!r) return false;
       r.t += dt; const v = r.u + r.a * r.t; let xs = r.x0 + r.u * r.t + 0.5 * r.a * r.t * r.t;
@@ -2655,7 +2655,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const P = A2.momentum, Kc = P._K;
   const TX0 = 50, TX1 = 1150, TY = 480, LEN = 1.4, PXM = (TX1 - TX0) / LEN, EXAG = 4;
   const CWp = Kc.CW * PXM, HA = sprH('cart2', CWp), HB = sprH('cart', CWp), K = KINDS.s500;
-  const TRAY = {x:820, y:550, w:200, h:70}, AX0 = 0.13;
+  const TRAY = {x:820, y:550, w:200, h:70}, AX0 = 0.20, PULL = 0.05;
   const ang = c => Math.asin(c.S.pack / 1000 / LEN), angV = c => ang(c) * EXAG;
   const sx = x => TX0 + x * PXM;
   const rot = (a, x, y) => { const dx = x - TX1, dy = y - TY, ca = Math.cos(a), sa = Math.sin(a); return [TX1 + dx * ca - dy * sa, TY + dx * sa + dy * ca]; };
@@ -2664,8 +2664,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function setupPos(c){ return c.inv.id === 'explode' ? {xA:Kc.CA, xB:Kc.CB} : {xA:AX0, xB:Kc.CB}; }
   const scene = {
     version:2, vb:[0, 236, 1200, 439],
-    hint:c => c.inv.id === 'explode' ? 'Tap the plunger on cart A to push the carts apart.' : 'Flick cart A towards cart B: drag it and let go while moving.',
-    help:['Sticking and bouncing: drag cart A and let go while you are still moving it. The faster the flick, the bigger the push.', 'Explosion: tap the plunger on cart A.', 'Drag 0.50 kg masses between the bench and cart B.', 'Friction check: tap <b>Remove B</b>, flick A on its own, and adjust the packing until A keeps a steady speed.', 'After a run, tap <b>Set up again</b>.'],
+    hint:c => c.inv.id === 'explode' ? 'Tap the plunger on cart A to push the carts apart.' : 'Pull cart A back against the spring and let go.',
+    help:['Sticking and bouncing: pull cart A back against the spring launcher and let go. Pull further for a bigger push.', 'Explosion: tap the plunger on cart A.', 'Drag 0.50 kg masses between the bench and cart B.', 'Friction check: tap <b>Remove B</b>, launch A on its own, and adjust the packing until A keeps a steady speed.', 'After a run, tap <b>Set up again</b>.'],
     tools:[1],
     init(c){ return Object.assign(setupPos(c), {vA:0, vB:0, nB:0, tray:2, parked:false, run:null, lcd:null, stuck:false}); },
     wake(c, st){ if (st.run) { Object.assign(st, setupPos(c), {run:null, vA:0, vB:0, stuck:false}); } },
@@ -2681,6 +2681,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       g += `<rect x="${TX0 - 2}" y="${TY - 20}" width="10" height="20" rx="2" fill="#3D4250"/><rect x="${TX1 - 8}" y="${TY - 20}" width="10" height="20" rx="2" fill="#3D4250"/>`;
       const gate = xs => { const w = 40, h = sprH('gate', w); return spr('gate', sx(xs) - w * 0.55, TY - 50 - 0.18 * h, w, h); };
       const card = (x, top) => `<rect x="${x - 4}" y="${top - 30}" width="8" height="30" fill="#1D2229"/><rect x="${x - 20}" y="${top - 30}" width="40" height="22" rx="2" fill="#1D2229"/>`;
+      /* spring launcher at the left end */
+      if (id !== 'explode') { const back = sx(st.xA) - CWp / 2; g += `<rect x="${TX0 + 2}" y="${TY - 34}" width="12" height="34" rx="3" fill="#3D4250"/>` + ST.coil(TX0 + 14, TY - 22, Math.max(TX0 + 22, back), TY - 22, 8, 8, "#4E5661"); }
       /* cart A (blue) */
       const xa = sx(st.xA), xb = sx(st.xB);
       g += spr('cart2', xa - CWp / 2, TY - HA, CWp, HA) + card(xa, TY - HA + 2) + ST.label(xa - 40, TY - 14, 'A', {fs:16, fill:'#fff', halo:false});
@@ -2708,8 +2710,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       const [hx, hy] = rot(a, TX0 + 10, TY + 4);
       if (!st.run) s += ST.grip(hx, hy, 14) + ST.hit(hx - 26, hy - 30, 52, 60, 'pack', '', 'ns-resize');
       s += ST.label(TX0 + 60, TY + 62, `packing ${c.S.pack} mm`, {fs:14});
-      if (!st.run && id !== 'explode' && Math.abs(st.xA - AX0) < 0.02) s += ST.grip(xa, TY - HA / 2 - 4, 16);
-      if (!st.run && id === 'explode' && !st.done) s += ST.grip(xa + CWp / 2 - 4, TY - 31, 13);
+      if (!st.run && id !== 'explode' && !st.done && Math.abs(st.xA - AX0) < 0.02) s += `<g transform="rotate(${aD.toFixed(3)} ${TX1} ${TY})">${ST.grip(xa, TY - HA / 2 - 4, 16)}</g>`;
+      if (!st.run && id === 'explode' && !st.done) s += `<g transform="rotate(${aD.toFixed(3)} ${TX1} ${TY})">${ST.grip(xa + CWp / 2 - 4, TY - 31, 13)}</g>`;
       const moved = st.done || Math.abs(st.xB - setupPos(c).xB) > 0.005 || (id === 'explode' && Math.abs(st.xA - Kc.CA) > 0.005);
       if (!st.run && moved) s += ST.pill(980, 250, 'Set up again', 'again', {w:130});
       if (!st.run && id !== 'explode' && !moved) s += ST.pill(980, 250, st.parked ? 'Put B back' : 'Remove B', 'park', {w:120});
@@ -2718,8 +2720,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       return s; },
     drag:{
       A:{ down(c, st, Pt, arg, d){ if (st.run) return false; if (st.done) { c.api.flash('Tap “Set up again” first.'); return false; } d.off = Pt.x - sx(st.xA); },
-        move(c, st, Pt, arg, d){ const a = angV(c); st.xA = Math.max(AX0, Math.min((st.parked ? 1.2 : Kc.CA - 0.01), (Pt.x - d.off - TX1) / Math.cos(a) / PXM + LEN)); st.lcd = null; },
-        up(c, st, Pt, arg, d){ const u = d.vx / PXM; if (u > 0.1) launch(c, st, Math.min(1.0, u)); else if (d.moved) c.api.flash('Let go while you are still moving it, to give it a push.'); } },
+        move(c, st, Pt, arg, d){ const a = angV(c); st.xA = Math.max(AX0 - PULL, Math.min(AX0, (Pt.x - d.off - TX1) / Math.cos(a) / PXM + LEN)); st.lcd = null; },
+        up(c, st){ const comp = AX0 - st.xA; if (comp > 0.004) launch(c, st, Math.min(0.95, comp / PULL * 0.95)); else { st.xA = AX0; c.api.flash('Pull cart A back to the left, against the spring, then let go.'); } } },
       pack:{ down(c, st, Pt, arg, d){ if (st.run) return false; d.p0 = c.S.pack; d.y0 = Pt.y; }, move(c, st, Pt, arg, d){ c.S.pack = Math.max(0, Math.min(30, Math.round(d.p0 + (d.y0 - Pt.y) / 3.1))); st.lcd = null; } }
     },
     tap:{
@@ -2755,7 +2757,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function launch(c, st, u){
     const [g1] = gates(c);
     if (st.xA > g1 - 0.03) { c.api.flash('Start cart A further back, behind gate 1.'); return; }
-    st.vA = u; st.vB = 0; st.lcd = null;
+    st.xA = AX0; st.vA = u; st.vB = 0; st.lcd = null;
     if (st.parked) { const sl = P._slopeA(c), vAt = x => { const q = u * u - 2 * sl.dn * (x - st.xA); return q > 0 ? Math.sqrt(q) : 0; }, [a1, a2] = gates(c), v1 = vAt(a1), v2 = vAt(a2);
       const verdict = !v2 ? 'stopped' : Math.abs(v2 - v1) < 0.006 ? 'steady' : v2 < v1 ? 'slowing: raise' : 'speeding up';
       st.run = {parked:true, lcd:[`v₁ ${fix(v1, 3)} m s⁻¹`, v2 ? `v₂ ${fix(v2, 3)} m s⁻¹` : 'v₂ stopped', verdict], show:[0, 0, 1]}; return; }
