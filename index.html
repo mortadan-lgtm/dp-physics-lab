@@ -1012,9 +1012,15 @@ const ST = {
     const st = ST.stack(cx, yHook + h * 0.94, n, slotW || w * 1.25, slotTh); return {s:s + st.s, top:st.top, bottom:yHook + h, h}; },
   arrow(x1, y1, x2, y2, col, w){ return arrowSVG(x1, y1, x2, y2, col || '#E8622A', w || 3); },
   /* stopwatch photo with its own display; t is the text shown */
-  watch(x, y, w, t, opts){ opts = opts || {}; const h = sprH('watch', w);
-    return `<g ${opts.attr || ''} ${opts.glow ? 'filter="url(#f-glow)"' : ''}>${spr('watch', x, y, w, h)}<rect x="${x + w * .235}" y="${y + h * .345}" width="${w * .53}" height="${h * .19}" rx="${w * .04}" fill="#C7D3BE"/>` +
-      `<text x="${x + w / 2}" y="${y + h * .485}" font-size="${(w * .17).toFixed(1)}" font-weight="800" text-anchor="middle" fill="${opts.on ? '#0B3A1C' : '#2E4033'}" ${MONO}>${t}</text></g>`; },
+  /* stopwatch photo: digits on its own screen (16.5 to 83% across, 23 to 49.5% down); top-right button starts and stops, top-left resets */
+  watch(x, y, w, t, opts){ opts = opts || {}; const h = sprH('watch', w), fs = w * .2;
+    let s = `<g ${opts.glow ? 'filter="url(#f-glow)"' : ''}>${spr('watch', x, y, w, h)}</g>` +
+      `<text x="${(x + w * .4975).toFixed(1)}" y="${(y + h * .3625 + fs * .36).toFixed(1)}" font-size="${fs.toFixed(1)}" font-weight="700" text-anchor="middle" fill="${opts.on ? '#10140F' : '#2A3027'}" ${MONO} letter-spacing="-1" pointer-events="none">${t}</text>`;
+    if (opts.ss) s += `<g data-tap="${opts.ss}" data-press="1" style="cursor:pointer"><rect x="${x + w * .72}" y="${y - h * .03}" width="${w * .3}" height="${h * .14}" fill="#fff" fill-opacity="0"/></g>` +
+      ST.label(x + w * .9, y - h * .045, 'start / stop', {fs:Math.max(11, w * .09), w:700});
+    if (opts.reset) s += `<g data-tap="${opts.reset}" data-press="1" style="cursor:pointer"><rect x="${x - w * .02}" y="${y - h * .03}" width="${w * .3}" height="${h * .14}" fill="#fff" fill-opacity="0"/></g>` +
+      ST.label(x + w * .1, y - h * .045, 'reset', {fs:Math.max(11, w * .09), w:700});
+    return s; },
   /* a small coil spring drawn between two points (for newton-meters and the stretchy string) */
   coil(x1, y1, x2, y2, n, r, col){ const L = Math.hypot(x2 - x1, y2 - y1); if (L < 1) return ''; const ux = (x2 - x1) / L, uy = (y2 - y1) / L; let pts = [`${x1.toFixed(1)},${y1.toFixed(1)}`];
     for (let i = 1; i < n * 2; i++) { const f = i / (n * 2), o = (i % 2 ? r : -r); pts.push(`${(x1 + ux * L * f - uy * o).toFixed(1)},${(y1 + uy * L * f + ux * o).toFixed(1)}`); }
@@ -1046,7 +1052,7 @@ function mountStage(host, ctx, hooks){
   const svg = $('svg', host), dyn = $('.dyn', host), over = $('.over', host), flashEl = $('.flash', host), hintEl = $('.sthint', host);
   const hb = $('.sthelp', host), hc = $('.sthelpcard', host);
   hb.onclick = () => { hc.hidden = !hc.hidden; hb.setAttribute('aria-expanded', String(!hc.hidden)); };
-  let drag = null, raf = null, last = 0, flashT = null, alive = true;
+  let drag = null, raf = null, last = 0, flashT = null, alive = true, press = null;
   const c0 = () => { const c = ctxOf(p); c.st = st; c.api = api; return c; };
   const binsOf = c => sc.bins ? sc.bins(c, st) : [];
   const inside = (z, P) => P.x >= z.x && P.x <= z.x + z.w && P.y >= z.y && P.y <= z.y + z.h;
@@ -1057,6 +1063,7 @@ function mountStage(host, ctx, hooks){
     if (st.held) { const K = KINDS[st.held.kind] || KINDS.s20;
       for (const b of binsOf(c)) if (b.kind === st.held.kind && b.n < b.max && !b.locked && b.id !== st.held.from) o += ST.zone(b.zone, inside(b.zone, st.held));
       o += `<g filter="url(#f-sh)" pointer-events="none">${spr(K.spr || 'slot', st.held.x - K.w / 2, st.held.y - K.th / 2, K.w, K.th)}</g>`; }
+    if (press) { const age = performance.now() - press.t; if (age < 220) o += `<circle cx="${press.x.toFixed(1)}" cy="${press.y.toFixed(1)}" r="${(10 + age / 14).toFixed(1)}" fill="#FFB547" fill-opacity="${(0.45 * (1 - age / 220)).toFixed(2)}" pointer-events="none"/>`; else press = null; }
     over.innerHTML = o;
   };
   const api = {
@@ -1078,7 +1085,7 @@ function mountStage(host, ctx, hooks){
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const more = sc.step ? sc.step(c0(), st, dt) : false;
     render();
-    if (more || drag) raf = requestAnimationFrame(loop); else { raf = null; save(); }
+    if (more || drag || press) raf = requestAnimationFrame(loop); else { raf = null; save(); }
   }
   const pt = e => { const m = svg.getScreenCTM().inverse(), q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; const r = q.matrixTransform(m); return {x:r.x, y:r.y, t:performance.now()}; };
   const hideHint = () => { if (hintEl && hintEl.classList.contains('on')) { hintEl.classList.remove('on'); s.sceneSeen = s.sceneSeen || {}; s.sceneSeen[ctxOf(p).inv.id] = 1; save(); } };
@@ -1100,7 +1107,7 @@ function mountStage(host, ctx, hooks){
       } else return;
       try { svg.setPointerCapture(e.pointerId); } catch (er) {}
       e.preventDefault(); render(); api.go();
-    } else if (tapEl) { drag = {tap:tapEl.dataset.tap, arg:tapEl.dataset.arg, p0:P}; e.preventDefault(); }
+    } else if (tapEl) { drag = {tap:tapEl.dataset.tap, arg:tapEl.dataset.arg, p0:P}; if (tapEl.dataset.press) { press = {x:P.x, y:P.y, t:performance.now()}; render(); api.go(); } e.preventDefault(); }
   });
   svg.addEventListener('pointermove', e => {
     if (!drag || drag.tap) return; const P = pt(e); drag.prev = drag.last; drag.last = P;
@@ -2132,7 +2139,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const scene = {
     version:2,
     hint:'Lift the right-hand mass up to the red mark and let go.',
-    keys:{' ':'watch'},
+    keys:{' ':'watch', r:'wreset'},
     help:['Drag 10 g masses from the bench onto the right-hand hanger. The falling mass $m$ is shown beside it.', 'Drag the red tape mark on the metre rule to set the drop height $h$.', 'Lift the right-hand mass to the mark and let go. It must start from rest at the mark.', 'Choose who times it. If you time it yourself, a countdown runs before the mass drops: tap the stopwatch (or press the space bar) on <b>Go!</b> and again as it lands.'],
     init(c){ return {n:2, tray:18, yr:0, fall:null, mode:'partner', sw:{on:false, t:0}, clock:0, show:'0.00', lastFall:null}; },
     bins(c, st){ const lock = st.fall ? 'Wait for it to land.' : null, top = yBottom(st.yr) - HH;
@@ -2172,8 +2179,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       if (st.tray) s += ST.hit(TRAY.x + 100 - K.w / 2 - 8, tr.top - 10, K.w + 16, 22, '__bin', 'tray');
       s += ST.label(TRAY.x + 100, TRAY.y + 92, '10 g masses', {fs:13, w:600});
       /* stopwatch and who times it */
-      s += ST.chips(WATCH.x - 40, WATCH.y - 54, [['partner', 'Partner times'], ['me', 'I time it']], st.mode, 'mode', !!st.fall || st.sw.on);
-      s += `<g data-tap="watch" style="cursor:pointer">${ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || !!st.fall, glow:st.mode === 'me' && !st.sw.on && !st.fall})}</g>`;
+      s += ST.chips(WATCH.x - 40, WATCH.y - 76, [['partner', 'Partner times'], ['me', 'I time it']], st.mode, 'mode', !!st.fall || st.sw.on);
+      s += ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || !!st.fall, glow:st.mode === 'me' && !st.sw.on && !st.fall, ss:'watch', reset:'wreset'});
       return s; },
     drag:{
       right:{ down(c, st, Pt, arg, d){ if (st.fall) return false; d.y0 = Pt.y; d.r0 = st.yr; },
@@ -2185,10 +2192,11 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
         move(c, st, Pt){ c.S.h = Math.max(0.60, Math.min(1.60, Math.round((PADY - Pt.y) / PXM / 0.05) * 0.05)); st.yr = Math.min(st.yr, c.S.h); } }
     },
     tap:{
-      mode(c, st, v){ st.mode = v; st.show = '0.00'; },
+      wreset(c, st){ if (st.sw.on) { c.api.flash('Stop the watch before you reset it.'); return; } st.sw.t = 0; st.show = '0.00'; },
+      mode(c, st, v){ st.mode = v; st.show = '0.00'; st.sw.t = 0; },
       watch(c, st){
         if (st.mode !== 'me') { c.api.flash('Your partner is timing. Choose “I time it” to use the stopwatch yourself.'); return; }
-        if (!st.sw.on) { st.sw = {on:true, t:0, start:st.clock}; st.show = '0.00'; return; }
+        if (!st.sw.on) { st.sw = {on:true, t:st.sw.t || 0, start:st.clock}; st.show = fix(st.sw.t, 2); return; }
         st.sw.on = false; const tm = Math.round(st.sw.t * 100) / 100; st.show = fix(tm, 2);
         const f = st.lastFall;
         if (f && f.valid && f.landed && f.start >= st.sw.start - 0.7 && f.start <= st.sw.start + 0.7) {
@@ -2566,7 +2574,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   const yOfX = x => SURF + x * PXM;
   const scene = {
     version:2,
-    keys:{' ':'watch'},
+    keys:{' ':'watch', r:'wreset'},
     hint:'Drag a ball bearing from the dish and drop it into the glycerol.',
     help:['Drag a ball bearing from the dish and let go above the cylinder.', 'Drag the rubber bands. The upper band must be low enough for the ball to have reached terminal speed.', 'Stopwatch: tap it (or press the space bar) as the ball passes the upper band and again at the lower band.', 'Light gates time it for you. Change the cylinder at the top: a narrow one slows the ball (the wall effect).', 'The thermometer and a terminal-speed check are in the buttons below the bench.'],
     tools:[0, 1],
@@ -2594,8 +2602,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       s += ST.label(DISH.x + 100, DISH.y + 98, 'diameter / mm', {fs:13, w:600});
       if (st.ball && st.ball.drag) { const r = ballR(st.ball.d) + 2; s += `<g filter="url(#f-sh)">${spr('ball', st.ball.x - r, st.ball.y - r, 2 * r)}</g>`; }
       /* timing */
-      s += ST.chips(WATCH.x - 60, WATCH.y - 56, [['watch', 'stopwatch'], ['gates', 'light gates']], S.timing, 'timing', !!st.ball);
-      s += `<g data-tap="watch" style="cursor:pointer">${ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || (gates && st.ball && st.ball.timing), glow:!gates && !!st.ball && !st.sw.on})}</g>`;
+      s += ST.chips(WATCH.x - 60, WATCH.y - 76, [['watch', 'stopwatch'], ['gates', 'light gates']], S.timing, 'timing', !!st.ball);
+      s += ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || (gates && st.ball && st.ball.timing), glow:!gates && !!st.ball && !st.sw.on, ss:'watch', reset:'wreset'});
       if (gates) s += ST.pill(WATCH.x + 4, WATCH.y + sprH('watch', WATCH.w) + 10, st.ff ? 'Speed ×5' : 'Speed ×1', 'ff', {w:110, on:st.ff});
       s += ST.chips(560, 18, Object.keys(P._CYL).map(k => [k, P._CYL[k][0].replace(/ cylinder.*diameter /, ' · ').replace(')', '')]), S.cyl, 'cyl', !!st.ball);
       return s; },
@@ -2608,12 +2616,13 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
         move(c, st, Pt){ c.S.s = Math.max(0.10, Math.min(0.25, Math.round(((Pt.y - SURF) / PXM - c.S.top / 100) / 0.05) * 0.05)); } }
     },
     tap:{
-      timing(c, st, v){ c.S.timing = v; st.show = '0.00'; st.sw.on = false; },
+      wreset(c, st){ if (st.sw.on) { c.api.flash('Stop the watch before you reset it.'); return; } st.sw.t = 0; st.show = '0.00'; },
+      timing(c, st, v){ c.S.timing = v; st.show = '0.00'; st.sw.on = false; st.sw.t = 0; },
       cyl(c, st, v){ c.S.cyl = v; st.sunk = []; },
       ff(c, st){ st.ff = !st.ff; },
       watch(c, st){
         if (c.S.timing === 'gates') { c.api.flash('The light gates are timing. Choose the stopwatch to time it yourself.'); return; }
-        if (!st.sw.on) { st.sw = {on:true, t:0, start:st.clock}; st.show = '0.00'; return; }
+        if (!st.sw.on) { st.sw = {on:true, t:st.sw.t || 0, start:st.clock}; st.show = fix(st.sw.t, 2); return; }
         st.sw.on = false; const tm = Math.round(st.sw.t * 100) / 100; st.show = fix(tm, 2);
         const b = st.ball || st.last;
         if (b && b.c1 !== undefined && Math.abs(st.sw.start - b.c1) < 1.2 && st.clock >= b.c1) { st.last = null; if (st.ball) st.ball.done = true;
@@ -2778,11 +2787,11 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
 (() => {
   const P = A2.bung;
   const TX = 560, TY = 250, PXM = 560, HW = 140, HH = sprH('hand', 140), BW = 40, BH = sprH('bung', 40);
-  const KH = KINDS.hanger50, K = KINDS.s50, TRAY = {x:880, y:540, w:200, h:70}, WATCH = {x:28, y:20, w:118};
+  const KH = KINDS.hanger50, K = KINDS.s50, TRAY = {x:880, y:540, w:200, h:70}, WATCH = {x:28, y:44, w:118};
   const Lof = (c, st) => c.inv.id === 'L' ? st.L : P._LFIX, Mof = (c, st) => c.inv.id === 'M' ? 0.050 * (1 + st.n) : P._MFIX;
   const scene = {
     version:2,
-    keys:{' ':'watch'},
+    keys:{' ':'watch', r:'wreset'},
     hint:'Tap the hand to start whirling the bung.',
     help:['Drag the bung out or in to set the length $L$ (only when it is not whirling).', 'Drag 50 g masses between the bench and the hanger to change $M$.', 'Tap the hand to whirl the bung at a steady speed, with the paper clip just below the tube. Tap again to stop.', 'A partner times the set number of turns from <b>Go!</b>, or choose “I time it” and tap the stopwatch (or press the space bar) on Go! and at the last turn.'],
     tools:[0],
@@ -2820,7 +2829,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       if (st.tray) s += ST.hit(TRAY.x + 100 - K.w / 2 - 6, tr.top - 6, K.w + 12, st.tray * K.th + 8, '__bin', 'tray');
       s += ST.label(TRAY.x + 100, TRAY.y + 82, '50 g masses', {fs:13, w:600});
       /* timing */
-      s += `<g data-tap="watch" style="cursor:pointer">${ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || (w && w.timing), glow:st.mode === 'me' && w && !st.sw.on})}</g>`;
+      s += ST.watch(WATCH.x, WATCH.y, WATCH.w, st.show, {on:st.sw.on || (w && w.timing), glow:st.mode === 'me' && w && !st.sw.on, ss:'watch', reset:'wreset'});
       const cnt = w && w.go !== null ? Math.max(0, Math.floor((w.t - w.go) / w.T + 1e-9)) : null;
       s += ST.lcd(WATCH.x + WATCH.w + 14, WATCH.y + 30, [`turns ${cnt === null ? '-' : cnt}`], {fs:22, dim:[cnt === null]});
       s += ST.chips(WATCH.x + WATCH.w + 14, WATCH.y + 82, [['partner', 'Partner times'], ['me', 'I time it']], st.mode, 'mode', !!w);
@@ -2829,14 +2838,15 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
     drag:{ bung:{ down(c, st){ if (st.whirl) return false; if (c.inv.id !== 'L') { c.api.flash('For this investigation the length stays at 0.60 m.'); return false; } },
       move(c, st, Pt){ st.L = Math.max(0.30, Math.min(0.90, Math.round((Pt.x - TX) / PXM / 0.05) * 0.05)); } } },
     tap:{
+      wreset(c, st){ if (st.sw.on) { c.api.flash('Stop the watch before you reset it.'); return; } st.sw.t = 0; st.show = '0.00'; },
       hand(c, st){ if (st.whirl) { st.whirl = null; st.sw.on = false; return; }
         const cc = ctxOf(c.p); cc.ivv = c.inv.id === 'L' ? st.L : Mof(c, st); const p = P._phys(cc), m = P.measure(cc);
         st.whirl = {t:0, ph:0, T:p.Trev, go:null, tm:m.vals.t, N:+c.S.nrev, ivv:cc.ivv, timing:false, done:false}; c.api.setIV(cc.ivv); st.show = '0.00'; },
-      mode(c, st, v){ st.mode = v; st.show = '0.00'; },
+      mode(c, st, v){ st.mode = v; st.show = '0.00'; st.sw.t = 0; },
       nrev(c, st, v){ if (c.run.rows.length) { c.api.flash(c.api.lockMsg); return; } c.S.nrev = v; },
       watch(c, st){
         if (st.mode !== 'me') { c.api.flash('Your partner is timing. Choose “I time it” to use the stopwatch yourself.'); return; }
-        if (!st.sw.on) { st.sw = {on:true, t:0, start:st.clock}; st.show = '0.00'; return; }
+        if (!st.sw.on) { st.sw = {on:true, t:st.sw.t || 0, start:st.clock}; st.show = fix(st.sw.t, 2); return; }
         st.sw.on = false; const tm = Math.round(st.sw.t * 100) / 100; st.show = fix(tm, 2);
         const w = st.whirl;
         if (w && w.go !== null && Math.abs(st.sw.start - w.goClock) < 1.0) c.api.rec({t:tm}, w.ivv, `${w.N} turns in ${fix(tm, 2)} s (they took ${fix(w.N * w.T, 2)} s)`);
