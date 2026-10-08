@@ -974,13 +974,13 @@ const ST = {
     if (opts.cut) { const x = opts.cut; s += `<rect x="${x}" y="${BENCH - 4}" width="${SW - x}" height="${SH - BENCH + 4}" fill="url(#g-floor)"/><rect x="${x}" y="${BENCH - 4}" width="${SW - x}" height="40" fill="#E3E6EA" opacity=".55"/>` +
       `<rect x="${x - 10}" y="${BENCH - 1}" width="12" height="${607 - BENCH}" fill="#B88C57"/><rect x="${x - 10}" y="${BENCH - 1}" width="12" height="4" fill="#E9CFA2"/><rect x="${x - 12}" y="607" width="14" height="${SH - 607}" fill="#39414F"/>`; }
     return s; },
-  lcd(x, y, lines, opts){ opts = opts || {}; const fs = opts.fs || 21, lh = opts.lh || fs * 1.3, w = opts.w || Math.max(120, 22 + fs * 0.62 * Math.max(...lines.map(l => String(l).replace(/<[^>]+>/g, '').length))), h = 14 + lines.length * lh;
+  lcd(x, y, lines, opts){ opts = opts || {}; if (opts.row) { const dimAll = opts.dim && opts.dim.some(Boolean); lines = [lines.filter(l => String(l).trim()).join('   ')]; opts = Object.assign({}, opts, {dim:[dimAll]}); } const fs = opts.fs || 21, lh = opts.lh || fs * 1.3, w = opts.w || Math.max(120, 22 + fs * 0.62 * Math.max(...lines.map(l => String(l).replace(/<[^>]+>/g, '').length))), h = 14 + lines.length * lh;
     return `<g ${opts.attr || ''} pointer-events="${opts.attr ? 'auto' : 'none'}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="#0E1621" fill-opacity=".92" stroke="#2B3A4C" stroke-width="2" filter="url(#f-sh)"/>` +
-      lines.map((l, i) => `<text x="${x + 12}" y="${(y + 7 + lh * (i + 0.76)).toFixed(1)}" font-size="${fs}" font-weight="700" fill="${opts.dim && opts.dim[i] ? '#7FA294' : '#C9FFE6'}" ${MONO}>${l}</text>`).join('') + `</g>`; },
+      lines.map((l, i) => `<text x="${x + 12}" y="${(y + 7 + lh * (i + 0.76)).toFixed(1)}" font-size="${fs}" font-weight="700" fill="${opts.dim && opts.dim[i] ? '#7FA294' : '#C9FFE6'}" ${MONO} style="white-space:pre">${l}</text>`).join('') + `</g>`; },
   label(x, y, s, opts){ opts = opts || {}; return `<text x="${x}" y="${y}" font-size="${opts.fs || 17}" font-weight="${opts.w || 700}" fill="${opts.fill || '#1C2430'}" text-anchor="${opts.anchor || 'middle'}" ${SANS} style="paint-order:stroke" stroke="${opts.halo === false ? 'none' : (opts.haloCol || 'rgba(255,255,255,.9)')}" stroke-width="4" stroke-linejoin="round" pointer-events="none">${s}</text>`; },
   pill(x, y, text, name, opts){ opts = opts || {}; const w = opts.w || 22 + text.replace(/<[^>]+>/g, '').length * 8.6, on = opts.on, dis = opts.disabled, h = opts.h || 34;
-    return `<g ${dis ? '' : `data-tap="${name}" data-arg="${opts.arg !== undefined ? opts.arg : ''}"`} style="cursor:${dis ? 'not-allowed' : 'pointer'}" opacity="${dis ? .5 : 1}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="${on ? '#0C9C98' : '#FFFFFF'}" fill-opacity="${on ? 1 : .94}" stroke="${on ? '#08706D' : '#B9C2CE'}" stroke-width="1.5" filter="url(#f-sh)"/>` +
-      `<text x="${x + w / 2}" y="${y + h / 2 + 5.5}" font-size="15" font-weight="700" text-anchor="middle" fill="${on ? '#fff' : '#1C2430'}" ${SANS}>${text}</text></g>`; },
+    return `<g ${dis ? '' : `data-tap="${name}" data-arg="${opts.arg !== undefined ? opts.arg : ''}"`} style="cursor:${dis ? 'not-allowed' : 'pointer'}" opacity="${dis ? .5 : 1}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="${opts.col || (on ? '#0C9C98' : '#FFFFFF')}" fill-opacity="${on || opts.col ? 1 : .94}" stroke="${opts.col ? '#7A1F18' : on ? '#08706D' : '#B9C2CE'}" stroke-width="1.5" filter="url(#f-sh)"/>` +
+      `<text x="${x + w / 2}" y="${y + h / 2 + 5.5}" font-size="15" font-weight="700" text-anchor="middle" fill="${on || opts.col ? '#fff' : '#1C2430'}" ${SANS}>${text}</text></g>`; },
   chips(x, y, items, active, name, locked){ let s = '', cx = x; for (const [val, lab] of items) { const w = 24 + lab.length * 8.4; s += ST.pill(cx, y, lab, name, {w, on:String(val) === String(active), arg:val, disabled:locked && String(val) !== String(active)}); cx += w + 8; } return s; },
   string(x1, y1, x2, y2, w, col){ return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${col || '#3A3226'}" stroke-width="${w || 2}" stroke-linecap="round"/>`; },
   hit(x, y, w, h, name, arg, cursor){ return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#fff" fill-opacity="0" data-drag="${name}" data-arg="${arg === undefined ? '' : arg}" style="cursor:${cursor || 'grab'}"/>`; },
@@ -1213,7 +1213,7 @@ A2.cart2 = (() => {
     const V1 = 0.100 / t1, V2 = 0.100 / t2, aL = (V2 * V2 - V1 * V1) / (2 * S.gap);
     const log = [`Gate 1:  ${fix(t1 * 1000, 1)} ms   v₁ = ${fix(V1, 3)} m s⁻¹`, `Gate 2:  ${fix(t2 * 1000, 1)} ms   v₂ = ${fix(V2, 3)} m s⁻¹`, `a = (v₂² − v₁²) / 2d = ${fix(aL, 2)} m s⁻²`];
     const sEnd = 0.20 + S.gap + 0.12;
-    const lcd = [`t₁ ${fix(t1 * 1000, 1)} ms`, `t₂ ${fix(t2 * 1000, 1)} ms`, `a  ${fix(aL, 2)} m s⁻²`];
+    const lcd = [`t₁ ${fix(t1 * 1000, 1)} ms`, `t₂ ${fix(t2 * 1000, 1)} ms`, `a ${fix(aL, 2)} m s⁻²`];
     return {vals:{a:aL}, lcd, a, html:A2.ro([['Gate 1', `${fix(t1 * 1000, 1)} ms, v₁ = ${fix(V1, 3)} m s⁻¹`], ['Gate 2', `${fix(t2 * 1000, 1)} ms, v₂ = ${fix(V2, 3)} m s⁻¹`], ['Acceleration from the logger', `${fix(aL, 2)} m s⁻²`]]),
       end:{s:sEnd, log}, anim:{dur:Math.min(2600, 700 + Math.sqrt(2 * sEnd / Math.max(0.05, a)) * 450), frame:f => ({s:sEnd * f * f, log:f < 1 ? ['Gate 1:  timing…', 'Gate 2:  timing…', 'a = …'] : log})}};
   }
@@ -2007,8 +2007,8 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
   function sourceOf(c, st){ if (c.inv.id !== 'F') return null; if (st.cart === 5 - st.hang) return 'trolley'; if (st.cart === 0) return 'bench'; return 'mixed'; }
   const scene = {
     version:2, vb:[0, 236, 1200, 439],
-    hint:'Tap the cart to let it go. Drag the slotted masses to change the pull.',
-    help:['Drag slotted masses between the cart, the hanger and the bench.', 'Tap the cart to let it go from the start mark (or drag it back there first). The datalogger times the card through both gates.', 'Drag <b>gate 2</b> to change $d$. Drag the raised end of the runway to change the packing.', 'Friction check: tap <b>Unhook</b>, then tap the cart to give it a gentle push. If v₁ and v₂ match, friction is compensated; if not, drag the raised end of the runway and try again.', 'Weigh the cart and masses with the button below the bench.'],
+    hint:'Tap the red Release button to let the cart go. Drag the slotted masses to change the pull.',
+    help:['Drag slotted masses between the cart, the hanger and the bench.', 'Tap the red <b>Release</b> button to let the cart go. After a run, drag the cart back to the start. The datalogger times the card through both gates.', 'Drag <b>gate 2</b> to change $d$. Drag the raised end of the runway to change the packing.', 'Friction check: tap <b>Unhook</b>, then tap the red <b>Push</b> button to give the cart a gentle push. If v₁ and v₂ match, friction is compensated; if not, drag the raised end of the runway and try again.', 'Weigh the cart and masses with the button below the bench.'],
     tools:[1],
     init(c){ return c.inv.id === 'F' ? {xs:XS0, hang:0, cart:5, tray:0, hooked:true, lcd:null, run:null} : {xs:XS0, cart:0, tray:5, hooked:true, lcd:null, run:null}; },
     bins(c, st){
@@ -2035,7 +2035,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       g += ST.stack(cx + 8, deck + 2, st.cart, K.w, K.th).s;
       if (st.cart > 0 && !st.run) g += ST.hit(cx + 8 - K.w / 2 - 6, deck + 2 - st.cart * K.th - 8, K.w + 12, st.cart * K.th + 12, '__bin', 'cart');
       g += ST.hit(cx - CW / 2, TY - CH + 4, CW, CH - 4, 'cart', '', st.run ? 'default' : 'grab');
-      if (!st.run && st.xs < XS0 + 0.01) g += ST.grip(cx, TY - CH / 2, 16);
+      if (!st.run && st.xs < XS0 + 0.01) g += `<line x1="${cx - CW * 0.42}" y1="${TY - CH - 34}" x2="${cx - CW * 0.42}" y2="${TY - CH * 0.6}" stroke="#7A1F18" stroke-width="2.5"/>` + ST.pill(cx - CW * 0.42 - 46, TY - CH - 70, st.hooked ? 'Release' : 'Push', 'go', {w:92, h:36, col:'#D93A30'});
       g += gate(G1, null) + gate(g2, 'gate2') + (st.run ? '' : ST.grip(sx(g2), TY + 30, 12));
       s += `<g transform="rotate(${aD.toFixed(3)} ${TX1} ${TY})">${g}</g>`;
       /* distance between the gates, below the runway */
@@ -2067,19 +2067,18 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       const [hx, hy] = rot(a, TX0 + 10, TY + 4);
       if (!st.run) s += ST.grip(hx, hy, 14) + ST.hit(hx - 26, hy - 30, 52, 60, 'pack', '', 'ns-resize');
       s += ST.label(TX0 + 22, TY + 62, `packing ${c.S.pack} mm`, {fs:14});
-      s += ST.lcd(20, 250, st.lcd || [st.hooked ? 't₁ --.- ms' : 'v₁ -.--- m s⁻¹', st.hooked ? 't₂ --.- ms' : 'v₂ -.--- m s⁻¹', st.hooked ? 'a  -.-- m s⁻²' : '  '], {fs:20, dim:st.lcd ? null : [1, 1, 1]});
+      s += ST.lcd(330, 248, st.lcd || [st.hooked ? 't₁ --.- ms' : 'v₁ -.--- m s⁻¹', st.hooked ? 't₂ --.- ms' : 'v₂ -.--- m s⁻¹', st.hooked ? 'a -.-- m s⁻²' : ''], {fs:19, row:true, dim:st.lcd ? null : [1, 1, 1]});
       return s; },
     drag:{
       cart:{
-        down(c, st, Pt, arg, d){ if (st.run) return false; d.off = Pt.x - sx(st.xs); d.x0 = st.xs; },
+        down(c, st, Pt, arg, d){ if (st.run) return false; d.off = Pt.x - sx(st.xs); },
         move(c, st, Pt, arg, d){ const a = angV(c); st.xs = Math.max(XS0, Math.min(XMAX, (Pt.x - d.off - TX1) / Math.cos(a) / PXM + LEN)); st.lcd = null; },
-        up(c, st, Pt, arg, d){ if (st.hooked) { if (!d.moved || st.xs < XS0 + 0.04) st.xs = st.xs < XS0 + 0.04 ? XS0 : st.xs; release(c, st); }
-          else if (!d.moved) push(c, st, 0.45 * (1 + RND.n(0, 0.04))); else st.lcd = null; }
-      },
+        up(c, st, Pt, arg, d){ st.xs = XS0; if (!d.moved) c.api.flash(st.hooked ? 'Tap the red Release button to let the cart go.' : 'Tap the red Push button to give the cart a gentle push.'); } },
       gate2:{ down(c, st){ if (st.run) return false; }, move(c, st, Pt){ const a = angV(c); const xs = (Pt.x - TX1) / Math.cos(a) / PXM + LEN; c.S.gap = Math.max(0.30, Math.min(0.70, Math.round((xs - G1) / 0.05) * 0.05)); st.lcd = null; } },
       pack:{ down(c, st, Pt, arg, d){ if (st.run) return false; d.p0 = c.S.pack; d.y0 = Pt.y; }, move(c, st, Pt, arg, d){ c.S.pack = Math.max(0, Math.min(30, Math.round(d.p0 + (d.y0 - Pt.y) / 3.1))); st.lcd = null; } }
     },
-    tap:{ hook(c, st){ if (st.run) return; st.hooked = !st.hooked; st.xs = XS0; st.lcd = null; if (!st.hooked) c.api.flash('Unhooked. Tap the cart to give it a gentle push.', 3200); } },
+    tap:{ go(c, st){ if (st.run) return; st.xs = XS0; if (st.hooked) release(c, st); else push(c, st, 0.45 * (1 + RND.n(0, 0.04))); },
+      hook(c, st){ if (st.run) return; st.hooked = !st.hooked; st.xs = XS0; st.lcd = null; if (!st.hooked) c.api.flash('Unhooked. Tap the red Push button to give the cart a gentle push.', 3200); } },
     step(c, st, dt){
       const r = st.run; if (!r) return false;
       r.t += dt; const v = r.u + r.a * r.t; let xs = r.x0 + r.u * r.t + 0.5 * r.a * r.t * r.t;
@@ -2716,7 +2715,7 @@ LAB.addTopic({id:'A2', code:'A.2', theme:'A', title:'Forces and momentum',
       if (!st.run && moved) s += ST.pill(980, 250, 'Set up again', 'again', {w:130});
       if (!st.run && id !== 'explode' && !moved) s += ST.pill(980, 250, st.parked ? 'Put B back' : 'Remove B', 'park', {w:120});
       const L = st.lcd || (id === 'explode' ? ['A t --.- ms', 'B t --.- ms'] : st.parked ? ['v₁ -.--- m s⁻¹', 'v₂ -.--- m s⁻¹'] : ['t₁ --.- ms', 't₂ --.- ms', id === 'bounce' ? 't₃ --.- ms' : '']);
-      s += ST.lcd(20, 250, L.filter(x => x !== ''), {fs:19, dim:st.lcd ? null : [1, 1, 1]});
+      s += ST.lcd(330, 248, L.filter(x => x !== ''), {fs:19, row:true, dim:st.lcd ? null : [1, 1, 1]});
       return s; },
     drag:{
       A:{ down(c, st, Pt, arg, d){ if (st.run) return false; if (st.done) { c.api.flash('Tap “Set up again” first.'); return false; } d.off = Pt.x - sx(st.xA); },
